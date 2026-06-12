@@ -1,0 +1,33 @@
+Carlos Eduardo Nkosi
+carlos.nkosi@outlook.com
+Luanda, Angola
+
+OBJECTIVE
+Recent graduate seeking entry-level position in software development.
+Motivated and eager to learn modern web technologies.
+
+EDUCATION
+Bachelor in Information Technology
+Instituto Superior Politécnico de Tecnologias - 2023
+
+SKILLS
+HTML, CSS, JavaScript, React, Python, SQL, Git, Linux, Scrum
+
+EXPERIENCE
+Web Developer Intern
+StartupAngola - Luanda
+2023 (6 months)
+- Developed front-end features using React and JavaScript
+- Collaborated with senior developers on API integrations
+- Fixed bugs and improved UX for mobile responsiveness
+
+Freelance Developer - 2022-2023
+- Built 3 websites for local businesses using HTML, CSS, JavaScript
+- Basic database design with MySQL
+
+LANGUAGES
+Portuguese, English
+
+PROJECTS
+E-commerce platform for local artisans (React + Node.js)
+Student management system (Python + SQLite)

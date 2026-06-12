@@ -1,0 +1,37 @@
+António Manuel Silva
+Email: antonio.silva@email.com | Phone: +244 923 456 789
+Location: Luanda, Angola
+
+PROFESSIONAL SUMMARY
+Senior Software Engineer with 7 years of experience building scalable web applications and data pipelines.
+Passionate about Python, machine learning, and cloud-native architectures.
+
+EXPERIENCE
+
+Senior Software Engineer
+Sonangol Digital - Luanda
+2020 - Present
+- Led development of data pipeline processing 5M records/day using Python and Apache Spark
+- Architected microservices with FastAPI and Docker on AWS infrastructure
+- Mentored a team of 5 junior developers
+
+Software Engineer
+Unitel Tech - Luanda
+2017 - 2020
+- Built REST APIs using Django and PostgreSQL
+- Implemented CI/CD pipelines with Jenkins and GitHub Actions
+- Optimized SQL queries reducing latency by 40%
+
+EDUCATION
+Bachelor in Computer Science
+Universidade Agostinho Neto - 2017
+
+SKILLS
+Python, JavaScript, React, Node.js, Django, FastAPI, PostgreSQL, MongoDB, AWS, Docker,
+Kubernetes, Machine Learning, Pandas, NumPy, Scikit-learn, SQL, Git, Agile, Scrum
+
+LANGUAGES
+Portuguese, English, French
+
+CERTIFICATIONS
+AWS Solutions Architect Associate - 2022

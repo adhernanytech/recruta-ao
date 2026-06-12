@@ -1,0 +1,39 @@
+Maria João Ferreira
+maria.joao@gmail.com | +351 912 345 678
+Porto, Portugal
+
+PERFIL
+Data Scientist com 4 anos de experiência em machine learning e análise de dados.
+Especialista em NLP e Computer Vision com background em matemática aplicada.
+
+EXPERIÊNCIA PROFISSIONAL
+
+Data Scientist - Farfetch
+2021 - Present
+- Desenvolveu modelos de recomendação usando TensorFlow e PyTorch
+- Implementou pipelines de NLP para análise de reviews (500k docs/semana)
+- Análise exploratória com Pandas, NumPy e visualização com Tableau
+
+Junior Data Analyst - NOS Comunicações
+2019 - 2021
+- Análise de churn de clientes com Scikit-learn
+- Dashboards executivos em Power BI
+- Queries complexas em SQL e PostgreSQL
+
+EDUCAÇÃO
+Mestrado em Ciência de Dados
+Universidade do Porto - 2019
+
+Licenciatura em Matemática Aplicada
+Universidade de Coimbra - 2017
+
+COMPETÊNCIAS
+Python, R, TensorFlow, PyTorch, Keras, Scikit-learn, NLP, Deep Learning,
+Machine Learning, Pandas, NumPy, SQL, PostgreSQL, Power BI, Tableau, Docker, Git, Agile
+
+IDIOMAS
+Português, Inglês, Espanhol
+
+CERTIFICAÇÕES
+Google Professional Data Engineer - 2023
+Microsoft Azure Data Scientist Associate - 2022
