@@ -41,6 +41,11 @@ matcher = MatchingEngine()
 @app.on_event("startup")
 def startup():
     init_db()
+    # Cria conta admin por defeito se não existir
+    if not get_user_by_email("admin@recruitao.ao"):
+        create_user("Administrador", "admin@recruitao.ao",
+                    hash_password("Admin@123"), role="admin")
+        print("✅ Admin criado: admin@recruitao.ao / Admin@123")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
