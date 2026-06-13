@@ -1,84 +1,100 @@
 """
-database.py — Camada de persistência SQLite para o RecrutaAO
-Tabelas: users, candidates, jobs, match_results
+database.py — RecrutaAO Multi-Tenant
+Tabelas: companies, users, candidates, jobs, match_results
+Cada empresa (tenant) tem dados completamente isolados.
 """
 
 import sqlite3
 import json
 import os
-from datetime import datetime
 from typing import Optional
 
-DB_DIR = os.environ.get("DB_DIR", os.path.dirname(__file__))
-DB_PATH = os.path.join(DB_DIR, os.environ.get("DB_NAME", "./bd/recruitao.db"))
+DB_DIR  = os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(DB_DIR, os.environ.get("DB_NAME", "recruitao.db"))
+
 
 def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row          # acesso por nome de coluna
+    conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
 def init_db():
-    """Cria todas as tabelas se não existirem."""
     conn = get_connection()
     c = conn.cursor()
 
-    # ── Utilizadores ──────────────────────────────────────────────
+    # ── Empresas (tenants) ────────────────────────────────────────────────────
     c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS companies (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             name        TEXT    NOT NULL,
-            email       TEXT    NOT NULL UNIQUE,
-            password    TEXT    NOT NULL,          -- bcrypt hash
-            role        TEXT    NOT NULL DEFAULT 'recruiter',
-                                                   -- 'admin' | 'recruiter'
+            slug        TEXT    NOT NULL UNIQUE,   -- identificador URL-friendly
+            email       TEXT    NOT NULL UNIQUE,   -- email de contacto da empresa
+            plan        TEXT    NOT NULL DEFAULT 'free',
             active      INTEGER NOT NULL DEFAULT 1,
             created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         )
     """)
 
-    # ── Candidatos / CVs ──────────────────────────────────────────
+    # ── Utilizadores ──────────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            name        TEXT    NOT NULL,
+            email       TEXT    NOT NULL UNIQUE,
+            password    TEXT    NOT NULL,
+            role        TEXT    NOT NULL DEFAULT 'recruiter',
+            active      INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # ── Candidatos ────────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS candidates (
-            id                    TEXT    PRIMARY KEY,
-            name                  TEXT    NOT NULL,
-            email                 TEXT,
-            phone                 TEXT,
-            location              TEXT,
-            summary               TEXT,
-            skills                TEXT,   -- JSON array
-            experience            TEXT,   -- JSON array
-            education             TEXT,   -- JSON array
-            languages             TEXT,   -- JSON array
-            certifications        TEXT,   -- JSON array
-            total_experience_years REAL   DEFAULT 0,
-            raw_text              TEXT,
-            uploaded_by           INTEGER REFERENCES users(id),
-            created_at            TEXT    NOT NULL DEFAULT (datetime('now'))
+            id                     TEXT    PRIMARY KEY,
+            company_id             INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            name                   TEXT    NOT NULL,
+            email                  TEXT,
+            phone                  TEXT,
+            location               TEXT,
+            summary                TEXT,
+            skills                 TEXT,
+            experience             TEXT,
+            education              TEXT,
+            languages              TEXT,
+            certifications         TEXT,
+            total_experience_years REAL    DEFAULT 0,
+            raw_text               TEXT,
+            uploaded_by            INTEGER REFERENCES users(id),
+            created_at             TEXT    NOT NULL DEFAULT (datetime('now'))
         )
     """)
 
-    # ── Vagas ─────────────────────────────────────────────────────
+    # ── Vagas ─────────────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS jobs (
-            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-            title                 TEXT    NOT NULL,
-            description           TEXT,
-            required_skills       TEXT,   -- JSON array
-            preferred_skills      TEXT,   -- JSON array
-            min_experience_years  INTEGER DEFAULT 0,
-            education_level       TEXT,
-            location              TEXT,
-            created_by            INTEGER REFERENCES users(id),
-            created_at            TEXT    NOT NULL DEFAULT (datetime('now'))
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id           INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            title                TEXT    NOT NULL,
+            description          TEXT,
+            required_skills      TEXT,
+            preferred_skills     TEXT,
+            min_experience_years INTEGER DEFAULT 0,
+            education_level      TEXT,
+            location             TEXT,
+            created_by           INTEGER REFERENCES users(id),
+            created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
         )
     """)
 
-    # ── Resultados de Matching ─────────────────────────────────────
+    # ── Resultados de Matching ────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS match_results (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id       INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
             job_id           INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
             candidate_id     TEXT    REFERENCES candidates(id) ON DELETE CASCADE,
             overall_score    REAL,
@@ -86,10 +102,10 @@ def init_db():
             experience_score REAL,
             education_score  REAL,
             location_score   REAL,
-            matched_skills   TEXT,   -- JSON array
-            missing_skills   TEXT,   -- JSON array
+            matched_skills   TEXT,
+            missing_skills   TEXT,
             recommendation   TEXT,
-            highlights       TEXT,   -- JSON array
+            highlights       TEXT,
             created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
         )
     """)
@@ -98,31 +114,75 @@ def init_db():
     conn.close()
 
 
-# ─── helpers JSON ────────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
-def _j(value) -> str:
-    return json.dumps(value or [], ensure_ascii=False)
+def _j(v) -> str:
+    return json.dumps(v or [], ensure_ascii=False)
 
-def _pj(value) -> list:
-    if not value:
-        return []
-    if isinstance(value, list):
-        return value
-    try:
-        return json.loads(value)
-    except Exception:
-        return []
+def _pj(v) -> list:
+    if not v: return []
+    if isinstance(v, list): return v
+    try: return json.loads(v)
+    except: return []
+
+def _row(row) -> Optional[dict]:
+    return dict(row) if row else None
 
 
-# ─── USERS ───────────────────────────────────────────────────────────────────
+# ── COMPANIES ─────────────────────────────────────────────────────────────────
 
-def create_user(name: str, email: str, hashed_password: str, role: str = "recruiter") -> dict:
+def create_company(name: str, slug: str, email: str) -> dict:
     conn = get_connection()
     try:
         c = conn.cursor()
         c.execute(
-            "INSERT INTO users (name, email, password, role) VALUES (?,?,?,?)",
-            (name, email, hashed_password, role)
+            "INSERT INTO companies (name, slug, email) VALUES (?,?,?)",
+            (name, slug, email)
+        )
+        conn.commit()
+        return get_company_by_id(c.lastrowid)
+    finally:
+        conn.close()
+
+def get_company_by_id(cid: int) -> Optional[dict]:
+    conn = get_connection()
+    try:
+        return _row(conn.execute("SELECT * FROM companies WHERE id=?", (cid,)).fetchone())
+    finally:
+        conn.close()
+
+def get_company_by_slug(slug: str) -> Optional[dict]:
+    conn = get_connection()
+    try:
+        return _row(conn.execute("SELECT * FROM companies WHERE slug=? AND active=1", (slug,)).fetchone())
+    finally:
+        conn.close()
+
+def get_company_by_email(email: str) -> Optional[dict]:
+    conn = get_connection()
+    try:
+        return _row(conn.execute("SELECT * FROM companies WHERE email=?", (email,)).fetchone())
+    finally:
+        conn.close()
+
+def list_companies() -> list:
+    conn = get_connection()
+    try:
+        return [dict(r) for r in conn.execute("SELECT * FROM companies ORDER BY created_at DESC").fetchall()]
+    finally:
+        conn.close()
+
+
+# ── USERS ─────────────────────────────────────────────────────────────────────
+
+def create_user(company_id: int, name: str, email: str,
+                hashed_password: str, role: str = "recruiter") -> dict:
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO users (company_id,name,email,password,role) VALUES (?,?,?,?,?)",
+            (company_id, name, email, hashed_password, role)
         )
         conn.commit()
         return get_user_by_id(c.lastrowid)
@@ -132,71 +192,70 @@ def create_user(name: str, email: str, hashed_password: str, role: str = "recrui
 def get_user_by_email(email: str) -> Optional[dict]:
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM users WHERE email=? AND active=1", (email,)).fetchone()
-        return dict(row) if row else None
+        return _row(conn.execute("SELECT * FROM users WHERE email=? AND active=1", (email,)).fetchone())
     finally:
         conn.close()
 
-def get_user_by_id(user_id: int) -> Optional[dict]:
+def get_user_by_id(uid: int) -> Optional[dict]:
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-        return dict(row) if row else None
+        return _row(conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone())
     finally:
         conn.close()
 
-def list_users() -> list:
+def list_users_by_company(company_id: int) -> list:
     conn = get_connection()
     try:
-        rows = conn.execute("SELECT id,name,email,role,active,created_at FROM users").fetchall()
+        rows = conn.execute(
+            "SELECT id,name,email,role,active,created_at FROM users WHERE company_id=?",
+            (company_id,)
+        ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
 
-def toggle_user_active(user_id: int, active: bool):
+def toggle_user_active(uid: int, active: bool):
     conn = get_connection()
     try:
-        conn.execute("UPDATE users SET active=? WHERE id=?", (1 if active else 0, user_id))
+        conn.execute("UPDATE users SET active=? WHERE id=?", (1 if active else 0, uid))
         conn.commit()
     finally:
         conn.close()
 
 
-# ─── CANDIDATES ──────────────────────────────────────────────────────────────
+# ── CANDIDATES ────────────────────────────────────────────────────────────────
 
-def save_candidate(profile: dict, uploaded_by: int = None) -> dict:
+def save_candidate(profile: dict, company_id: int, uploaded_by: int = None) -> dict:
     conn = get_connection()
     try:
         conn.execute("""
             INSERT OR REPLACE INTO candidates
-            (id, name, email, phone, location, summary, skills, experience,
-             education, languages, certifications, total_experience_years,
-             raw_text, uploaded_by)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (id,company_id,name,email,phone,location,summary,skills,experience,
+             education,languages,certifications,total_experience_years,raw_text,uploaded_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            profile["id"], profile["name"], profile.get("email",""),
-            profile.get("phone",""), profile.get("location",""),
-            profile.get("summary",""),
-            _j(profile.get("skills",[])),
-            _j(profile.get("experience",[])),
-            _j(profile.get("education",[])),
-            _j(profile.get("languages",[])),
+            profile["id"], company_id, profile["name"],
+            profile.get("email",""), profile.get("phone",""),
+            profile.get("location",""), profile.get("summary",""),
+            _j(profile.get("skills",[])), _j(profile.get("experience",[])),
+            _j(profile.get("education",[])), _j(profile.get("languages",[])),
             _j(profile.get("certifications",[])),
             profile.get("total_experience_years", 0),
-            profile.get("raw_text","")[:500],
-            uploaded_by
+            profile.get("raw_text","")[:500], uploaded_by
         ))
         conn.commit()
-        return get_candidate(profile["id"])
+        return get_candidate(profile["id"], company_id)
     finally:
         conn.close()
 
-def get_candidate(candidate_id: str) -> Optional[dict]:
+def get_candidate(candidate_id: str, company_id: int) -> Optional[dict]:
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM candidates WHERE id=?", (candidate_id,)).fetchone()
-        if not row:
-            return None
+        row = conn.execute(
+            "SELECT * FROM candidates WHERE id=? AND company_id=?",
+            (candidate_id, company_id)
+        ).fetchone()
+        if not row: return None
         d = dict(row)
         for f in ["skills","experience","education","languages","certifications"]:
             d[f] = _pj(d.get(f))
@@ -204,10 +263,13 @@ def get_candidate(candidate_id: str) -> Optional[dict]:
     finally:
         conn.close()
 
-def list_candidates() -> list:
+def list_candidates(company_id: int) -> list:
     conn = get_connection()
     try:
-        rows = conn.execute("SELECT * FROM candidates ORDER BY created_at DESC").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM candidates WHERE company_id=? ORDER BY created_at DESC",
+            (company_id,)
+        ).fetchall()
         result = []
         for row in rows:
             d = dict(row)
@@ -218,55 +280,57 @@ def list_candidates() -> list:
     finally:
         conn.close()
 
-def delete_candidate(candidate_id: str) -> bool:
+def delete_candidate(candidate_id: str, company_id: int) -> bool:
     conn = get_connection()
     try:
-        c = conn.execute("DELETE FROM candidates WHERE id=?", (candidate_id,))
+        c = conn.execute(
+            "DELETE FROM candidates WHERE id=? AND company_id=?",
+            (candidate_id, company_id)
+        )
         conn.commit()
         return c.rowcount > 0
     finally:
         conn.close()
 
-def clear_candidates():
+def clear_candidates(company_id: int):
     conn = get_connection()
     try:
-        conn.execute("DELETE FROM candidates")
+        conn.execute("DELETE FROM candidates WHERE company_id=?", (company_id,))
         conn.commit()
     finally:
         conn.close()
 
 
-# ─── JOBS ─────────────────────────────────────────────────────────────────────
+# ── JOBS ──────────────────────────────────────────────────────────────────────
 
-def save_job(job: dict, created_by: int = None) -> dict:
+def save_job(job: dict, company_id: int, created_by: int = None) -> dict:
     conn = get_connection()
     try:
         c = conn.cursor()
         c.execute("""
             INSERT INTO jobs
-            (title, description, required_skills, preferred_skills,
-             min_experience_years, education_level, location, created_by)
-            VALUES (?,?,?,?,?,?,?,?)
+            (company_id,title,description,required_skills,preferred_skills,
+             min_experience_years,education_level,location,created_by)
+            VALUES (?,?,?,?,?,?,?,?,?)
         """, (
-            job["title"], job.get("description",""),
-            _j(job.get("required_skills",[])),
-            _j(job.get("preferred_skills",[])),
-            job.get("min_experience_years", 0),
-            job.get("education_level",""),
-            job.get("location",""),
-            created_by
+            company_id, job["title"], job.get("description",""),
+            _j(job.get("required_skills",[])), _j(job.get("preferred_skills",[])),
+            job.get("min_experience_years",0), job.get("education_level",""),
+            job.get("location",""), created_by
         ))
         conn.commit()
-        return get_job(c.lastrowid)
+        return get_job(c.lastrowid, company_id)
     finally:
         conn.close()
 
-def get_job(job_id: int) -> Optional[dict]:
+def get_job(job_id: int, company_id: int) -> Optional[dict]:
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
-        if not row:
-            return None
+        row = conn.execute(
+            "SELECT * FROM jobs WHERE id=? AND company_id=?",
+            (job_id, company_id)
+        ).fetchone()
+        if not row: return None
         d = dict(row)
         d["required_skills"] = _pj(d.get("required_skills"))
         d["preferred_skills"] = _pj(d.get("preferred_skills"))
@@ -274,10 +338,13 @@ def get_job(job_id: int) -> Optional[dict]:
     finally:
         conn.close()
 
-def list_jobs() -> list:
+def list_jobs(company_id: int) -> list:
     conn = get_connection()
     try:
-        rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE company_id=? ORDER BY created_at DESC",
+            (company_id,)
+        ).fetchall()
         result = []
         for row in rows:
             d = dict(row)
@@ -288,32 +355,37 @@ def list_jobs() -> list:
     finally:
         conn.close()
 
-def delete_job(job_id: int) -> bool:
+def delete_job(job_id: int, company_id: int) -> bool:
     conn = get_connection()
     try:
-        c = conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+        c = conn.execute(
+            "DELETE FROM jobs WHERE id=? AND company_id=?",
+            (job_id, company_id)
+        )
         conn.commit()
         return c.rowcount > 0
     finally:
         conn.close()
 
 
-# ─── MATCH RESULTS ────────────────────────────────────────────────────────────
+# ── MATCH RESULTS ─────────────────────────────────────────────────────────────
 
-def save_match_results(job_id: int, results: list):
+def save_match_results(job_id: int, company_id: int, results: list):
     conn = get_connection()
     try:
-        conn.execute("DELETE FROM match_results WHERE job_id=?", (job_id,))
+        conn.execute(
+            "DELETE FROM match_results WHERE job_id=? AND company_id=?",
+            (job_id, company_id)
+        )
         for r in results:
             conn.execute("""
                 INSERT INTO match_results
-                (job_id, candidate_id, overall_score, skill_score,
-                 experience_score, education_score, location_score,
-                 matched_skills, missing_skills, recommendation, highlights)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                (company_id,job_id,candidate_id,overall_score,skill_score,
+                 experience_score,education_score,location_score,
+                 matched_skills,missing_skills,recommendation,highlights)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
-                job_id,
-                r["candidate"]["id"],
+                company_id, job_id, r["candidate"]["id"],
                 r["overall_score"], r["skill_score"],
                 r["experience_score"], r["education_score"], r["location_score"],
                 _j(r["matched_skills"]), _j(r["missing_skills"]),
@@ -323,16 +395,16 @@ def save_match_results(job_id: int, results: list):
     finally:
         conn.close()
 
-def get_match_results(job_id: int) -> list:
+def get_match_results(job_id: int, company_id: int) -> list:
     conn = get_connection()
     try:
         rows = conn.execute("""
             SELECT mr.*, c.name as candidate_name
             FROM match_results mr
             JOIN candidates c ON mr.candidate_id = c.id
-            WHERE mr.job_id = ?
+            WHERE mr.job_id=? AND mr.company_id=?
             ORDER BY mr.overall_score DESC
-        """, (job_id,)).fetchall()
+        """, (job_id, company_id)).fetchall()
         result = []
         for row in rows:
             d = dict(row)
@@ -343,3 +415,20 @@ def get_match_results(job_id: int) -> list:
         return result
     finally:
         conn.close()
+
+def get_stats(company_id: int) -> dict:
+    candidates = list_candidates(company_id)
+    if not candidates:
+        return {"total_candidates": 0}
+    all_skills = [s for c in candidates for s in c.get("skills", [])]
+    freq = {}
+    for s in all_skills:
+        freq[s] = freq.get(s, 0) + 1
+    top = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:10]
+    exp_vals = [c["total_experience_years"] for c in candidates if c.get("total_experience_years")]
+    return {
+        "total_candidates": len(candidates),
+        "avg_experience_years": round(sum(exp_vals)/len(exp_vals), 1) if exp_vals else 0,
+        "top_skills": [{"skill": s, "count": c} for s, c in top],
+        "locations": list(set(c["location"] for c in candidates if c.get("location")))
+    }
